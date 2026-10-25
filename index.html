@@ -686,6 +686,16 @@ function plural(n, one, few, many) {
   return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
 }
 
+// «можно будет завтра / послезавтра / через неделю / через 9 дней»
+function whenIn(d) {
+  const n = Math.round((startOfDay(d) - today) / DAY);
+  if (n <= 0) return "сегодня";
+  if (n === 1) return "завтра";
+  if (n === 2) return "послезавтра";
+  if (n % 7 === 0 && n <= 28) return n === 7 ? "через неделю" : `через ${n / 7} ${plural(n / 7, "неделю", "недели", "недель")}`;
+  return `через ${n} ${plural(n, "день", "дня", "дней")}`;
+}
+
 // ---------- память телефона (может не работать — тогда просто без неё) ----------
 function load(key) { try { return localStorage.getItem(key); } catch { return null; } }
 function save(key, value) { try { localStorage.setItem(key, value); } catch {} }
@@ -753,7 +763,7 @@ function tile(item, words) {
   st.firstChild.textContent = words[item.status];
   if (item.status === "no" && item.until) {
     const w = document.createElement("span");
-    w.textContent = `можно с ${human(addDays(session, item.until - 1))}`;
+    w.textContent = `можно ${whenIn(addDays(session, item.until - 1))}`;
     st.append(w);
   }
   if (item.icon) b.append(top, nm, st);
@@ -775,7 +785,7 @@ function openModal(item, words, from) {
   $("m-ic").innerHTML = item.icon ? `<span class="t-ic">${svg(item.icon)}</span>` : "";
   $("m-st").replaceWith(Object.assign(statusEl(item.status, words, "m-st"), { id: "m-st" }));
   $("m-title").textContent = item.title;
-  const when = item.status === "no" && item.until ? `Можно будет с ${human(addDays(session, item.until - 1))}.` : "";
+  const when = item.status === "no" && item.until ? `Можно будет ${whenIn(addDays(session, item.until - 1))} — ${human(addDays(session, item.until - 1))}.` : "";
   $("m-text").innerHTML = when ? `<span class="when"></span><br>` : "";
   if (when) $("m-text").firstChild.textContent = when;
   $("m-text").append(item.text);
