@@ -343,6 +343,19 @@ main { max-width: 34rem; margin: 0 auto; display: grid; gap: 14px; }
 #ask-card h1 { font-size: 44px; }
 #ask-card .hint { font-size: 16.5px; }
 #ask-card select { text-align: left; }
+.ph .trash { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #fff; background: rgba(11,11,10,.62); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.ph .trash svg { width: 18px; height: 18px; }
+.ask-del { position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; gap: 10px; background: rgba(11,11,10,.82); font-size: 14px; font-weight: 600; }
+.ask-del[hidden] { display: none; }
+.ad-b { display: flex; gap: 6px; }
+.ad-b button { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; font-size: 13.5px; font-weight: 600; cursor: pointer; color: #fff; background: rgba(238,237,233,.16); }
+.ad-b .y { background: #C2362B; }
+.viewer { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; align-content: center; gap: 12px; background: rgba(5,5,4,.99); padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px)); }
+.viewer img { max-width: 100%; max-height: calc(100svh - 120px); border-radius: 20px; object-fit: contain; }
+.viewer p { margin: 0; font-size: 14px; color: var(--muted); }
+.v-x { position: absolute; top: max(14px, env(safe-area-inset-top, 0px)); right: 14px; width: 44px; height: 44px; border: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(238,237,233,.14); cursor: pointer; }
+.v-x svg { width: 20px; height: 20px; }
+.ph { cursor: zoom-in; }
 </style>
 
 <style>html{padding-top:env(safe-area-inset-top,0px)}body{margin:0}[hidden]{display:none!important}</style>
@@ -450,6 +463,11 @@ main { max-width: 34rem; margin: 0 auto; display: grid; gap: 14px; }
       <button type="button" class="btn" id="m-close">Понятно</button>
     </div>
   </div>
+</div>
+
+<div class="viewer" id="viewer" hidden role="dialog" aria-label="Фото татуировки">
+  <img alt="Фото татуировки"><p id="v-cap"></p>
+  <button type="button" class="v-x" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
 </div>
 
 <div class="mwrap" id="iwrap" hidden>
@@ -1012,11 +1030,16 @@ async function renderPhotos() {
   $("ph-grid").hidden = !list.length;
   $("ph-grid").replaceChildren(...list.map(r => {
     const f = document.createElement("figure"); f.className = "ph";
-    f.innerHTML = `<img alt=""><figcaption></figcaption><button type="button" class="del">Удалить</button>`;
+    f.innerHTML = `<img alt=""><figcaption></figcaption>
+      <button type="button" class="trash" aria-label="Удалить фото"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12M10 11v6M14 11v6"/></svg></button>
+      <div class="ask-del" hidden><span>Удалить?</span><span class="ad-b"><button type="button" class="y">Да</button><button type="button" class="n">Нет</button></span></div>`;
     f.querySelector("img").src = r.d;
     f.querySelector("figcaption").textContent = `${r.day}-й день`;
-    f.addEventListener("click", e => { if (e.target.closest(".del")) return; document.querySelectorAll(".ph.sel").forEach(x => x !== f && x.classList.remove("sel")); f.classList.toggle("sel"); });
-    f.querySelector(".del").addEventListener("click", async () => { await phTx("readwrite", st => st.delete(r.id)); renderPhotos(); });
+    const ask = f.querySelector(".ask-del");
+    f.addEventListener("click", e => { if (e.target.closest(".trash, .ask-del")) return; openViewer(r); });
+    f.querySelector(".trash").addEventListener("click", () => { ask.hidden = false; });
+    f.querySelector(".n").addEventListener("click", () => { ask.hidden = true; });
+    f.querySelector(".y").addEventListener("click", async () => { await phTx("readwrite", st => st.delete(r.id)); renderPhotos(); });
     return f;
   }));
   $("ph-hint").textContent = list.length ? "Добавляй снимки в разные дни. Они сохраняются в этой памятке и видны только тебе." : "Снимай татуировку в разные дни — через год увидишь, как она заживала. Фото сохраняются в этой памятке и видны только тебе.";
@@ -1026,6 +1049,16 @@ async function renderPhotos() {
     ev.querySelector("figcaption").textContent = `Так она выглядела на ${first.day}-й день`;
   } else ev.hidden = true;
 }
+// ---------- просмотр снимка на весь экран ----------
+function openViewer(r) {
+  $("viewer").querySelector("img").src = r.d;
+  $("v-cap").textContent = `${r.day}-й день · ${human(new Date(r.ts))}`;
+  $("viewer").hidden = false;
+  if (!reduce) $("viewer").animate([{ opacity: 0 }, { opacity: 1 }], { duration: 250 });
+}
+function closeViewer() { $("viewer").hidden = true; }
+$("viewer").addEventListener("click", closeViewer);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeViewer(); });
 $("ph-add").addEventListener("click", () => installed ? $("ph-in").click() : openPop());
 $("ph-in").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = "";
