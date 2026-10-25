@@ -1,7 +1,6 @@
 {
  "name": "Памятка по уходу",
  "short_name": "Моя тату",
- "start_url": "./",
  "scope": "./",
  "display": "standalone",
  "background_color": "#0B0B0A",
