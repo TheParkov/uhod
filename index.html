@@ -317,16 +317,30 @@ main { max-width: 34rem; margin: 0 auto; display: grid; gap: 14px; }
 .acc-b .card { background: rgba(238,237,233,.045); box-shadow: inset 0 0 0 1px rgba(238,237,233,.07); border-radius: 20px; }
 .do li { font-size: 18.5px !important; line-height: 1.3; }
 .do .d-ic { width: 44px !important; height: 44px !important; }
+.top b { font-size: 26px; letter-spacing: -.045em; }
+.ask select { width: 100%; height: 56px; font: 600 17px var(--font); color: var(--ink); border: 0; border-radius: 18px; padding: 0 44px 0 16px; -webkit-appearance: none; appearance: none; min-width: 0;
+  background: rgba(238,237,233,.06) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A3A29C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center / 20px;
+  box-shadow: inset 0 0 0 1px rgba(238,237,233,.12); }
+.btn:disabled { opacity: .45; cursor: default; }
+@media (max-width: 439px) {
+  .dock { gap: 6px; padding: 6px; }
+  .dock .tab { font-size: 14.5px; padding: 0 4px; }
+  .dock .write { width: 50px; height: 50px; padding: 0; justify-content: center; gap: 0; }
+  .dock .write > span:first-child { display: none; }
+  .dock .write .b-ic { width: 50px; height: 50px; background: transparent; color: var(--on-gold); }
+  .dock .write .b-ic svg { width: 21px; height: 21px; }
+  .dock .tab, .dock .ind { height: 50px; }
+}
+.dock .tabs[hidden] ~ .write { flex: 1 1 auto; width: auto; height: 54px; justify-content: space-between; padding: 0 6px 0 24px; gap: 12px; }
+.dock .tabs[hidden] ~ .write > span:first-child { display: inline; }
+.dock .tabs[hidden] ~ .write .b-ic { width: 42px; height: 42px; background: #121211; color: var(--gold); }
 </style>
 
 <style>html{padding-top:env(safe-area-inset-top,0px)}body{margin:0}[hidden]{display:none!important}</style>
 </head>
 <body>
 <main>
-  <header class="top">
-    <span class="mono" aria-hidden="true">ВП</span>
-    <div><b id="master-top">Владимир Парков</b><span>тату-мастер · памятка по уходу</span></div>
-  </header>
+  <header class="top"><span class="mono" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 3.2c3.6 4.3 6.3 7.4 6.3 10.7a6.3 6.3 0 0 1-12.6 0c0-3.3 2.7-6.4 6.3-10.7z" fill="#F37021"/></svg></span><b id="master-top">Памятка по уходу</b></header>
 
   <button type="button" class="save-strip" id="top-add" hidden>
     <span class="s-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="2.8" width="11" height="18.4" rx="3"/><path d="M12 9v6M9 12h6"/></svg></span>
@@ -337,14 +351,14 @@ main { max-width: 34rem; margin: 0 auto; display: grid; gap: 14px; }
   <!-- Нет даты: сначала спросить -->
   <section class="view" id="view-ask" hidden aria-labelledby="ask-title">
     <div class="card hero ask rv">
-      <span class="eyebrow">Памятка по уходу</span>
       <h1 id="ask-title">Когда был сеанс?</h1>
       <p class="hint">Я посчитаю, какой у тебя день заживления, и подскажу, что делать.</p>
       <div class="row">
         <button type="button" class="btn main" id="ask-today">Сегодня</button>
         <button type="button" class="btn" id="ask-yesterday">Вчера</button>
       </div>
-      <label for="ask-date"><span class="hint">Или выбери дату</span><input type="date" id="ask-date"></label>
+      <label for="ask-date"><span class="hint">Или выбери дату сеанса</span><select id="ask-date"></select></label>
+      <button type="button" class="btn" id="ask-go" disabled>Показать памятку</button>
     </div>
   </section>
 
@@ -1016,7 +1030,6 @@ $("ph-in").addEventListener("change", async e => {
 });
 
 // ---------- мастер ----------
-$("master-top").textContent = CONFIG.master;
 $("nick").textContent = `@${CONFIG.telegram} в Telegram`;
 for (const id of ["write", "m-write", "event-btn"]) $(id).href = `https://t.me/${CONFIG.telegram}`;
 
@@ -1060,8 +1073,17 @@ function setSession(d) {
 }
 $("ask-today").addEventListener("click", () => setSession(today));
 $("ask-yesterday").addEventListener("click", () => setSession(addDays(today, -1)));
-$("ask-date").max = iso(today);
-$("ask-date").addEventListener("change", e => setSession(parseISO(e.target.value)));
+const WD = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+{
+  const sel = $("ask-date");
+  sel.append(new Option("Выбрать дату…", ""));
+  for (let i = 0; i <= 240; i++) {
+    const d = addDays(today, -i);
+    sel.append(new Option(i === 0 ? "Сегодня" : i === 1 ? "Вчера" : `${human(d)}${d.getFullYear() !== today.getFullYear() ? " " + d.getFullYear() : ""}, ${WD[d.getDay()]}`, iso(d)));
+  }
+  sel.addEventListener("change", () => { $("ask-go").disabled = !sel.value; });
+  $("ask-go").addEventListener("click", () => setSession(parseISO(sel.value)));
+}
 $("session-edit").addEventListener("click", () => { session = null; show("today", true); });
 
 if (session) render();
