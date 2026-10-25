@@ -384,6 +384,7 @@ main { max-width: 34rem; margin: 0 auto; display: grid; gap: 14px; }
       </div>
       <label for="ask-date"><span class="hint">Или выбери дату сеанса</span><select id="ask-date"></select></label>
       <button type="button" class="btn" id="ask-go" disabled>Показать памятку</button>
+      <button type="button" class="linkish" id="ask-back" hidden>Оставить прежнюю дату</button>
     </div>
   </section>
 
@@ -395,7 +396,7 @@ main { max-width: 34rem; margin: 0 auto; display: grid; gap: 14px; }
         <h2 id="hello">Привет!</h2>
         <p class="meta"><span id="meta-what"></span><span id="meta-date">Сеанс был 21 октября</span><span class="sep">·</span><button type="button" class="linkish" id="session-edit">изменить</button></p>
       </div>
-      <h1 class="day" aria-live="polite"><span class="day-n" id="day-num">5</span><span class="day-w"><b>-й день</b><span id="day-of">из 14 до заживления</span></span></h1>
+      <h1 class="day" aria-live="polite"><span class="day-n" id="day-num">5</span><span class="day-w"><b>-й день</b><span id="day-of">из 14 дней заживления</span></span></h1>
       <div class="path">
         <div class="track" id="track" role="img" aria-label="День 5 из 14">
           <span class="fill" id="fill"></span><span class="tick" id="tick"></span><span class="marker" id="marker"></span>
@@ -429,7 +430,6 @@ main { max-width: 34rem; margin: 0 auto; display: grid; gap: 14px; }
       <button type="button" class="acc-h" id="acc2-h" aria-expanded="false" aria-controls="acc2-b">Фотодневник татуировки<span class="plus" aria-hidden="true"></span></button>
       <div class="acc-b" id="acc2-b" hidden><div class="inner">
     <article class="card photos" id="photos">
-      <span class="eyebrow">Дневник заживления</span>
       <h2>Сфотографируй и сохрани</h2>
       <p class="hint" id="ph-hint">Снимай татуировку в разные дни — через год увидишь, как она заживала. Фото сохраняются в этой памятке и видны только тебе.</p>
       <div class="ph-grid" id="ph-grid" hidden></div>
@@ -569,7 +569,7 @@ function stages() {
 
 // ---------- важные дни ----------
 function eventFor(day) {
-  if (day >= 365 && day < 372) { const y = Math.floor(day / 365);
+  if (day >= 365 && day % 365 < 7) { const y = Math.floor(day / 365);
     return { title: `Ого, твоей татуировке уже ${y === 1 ? "целый год" : plural(y, "год", "года", "лет")}!`, text: "Как быстро летит время. Не пора ли сделать новую? Напиши — придумаем эскиз.", steps: [], btn: "Обсудить новую татуировку" }; }
   if (day === CONFIG.filmDays) return {
     title: "Сегодня снимаем плёнку", text: "Если она не отклеилась раньше. Без спешки, лучше вечером в душе.",
@@ -591,7 +591,7 @@ function nextStep(day) {
   if (day === f) return { icon: "film", text: "Сегодня снимаем плёнку", jump: true };
   if (day < h) return { icon: "sparkle", text: `До заживления ${days(h - day)}` };
   if (day === h) return { icon: "camera", text: "Сегодня пришли мне фото", jump: true };
-  return { icon: "sparkle", text: day >= 365 ? "Годовщина! Пора делать новую?" : "Татуировка зажила. Пора делать новую?", link: true };
+  return { icon: "sparkle", text: day >= 365 && day % 365 < 7 ? "Годовщина! Пора делать новую?" : "Татуировка зажила. Пора делать новую?", link: true };
 }
 
 // ---------- можно ли: сначала самые частые вопросы ----------
@@ -706,8 +706,13 @@ function save(key, value) { try { localStorage.setItem(key, value); } catch {} }
 // ---------- данные клиента: из личной ссылки (?n=Маша&t=домик&d=2026-10-25) или из памяти телефона ----------
 const params = new URLSearchParams(location.search);
 const today = startOfDay(new Date());
-for (const [p, key] of [["d", "session"], ["n", "name"], ["t", "what"]]) if (params.get(p)) save(key, params.get(p));
-let session = parseISO(params.get("d")) || parseISO(load("session"));
+// дату из ссылки берём один раз: если клиент потом сменил дату сам, значок на экране со старой ссылкой её не перебьёт
+const linkD = params.get("d");
+function seenLinks() { try { return JSON.parse(load("d-links") || "[]"); } catch { return []; } }
+function markSeen(v) { const l = seenLinks(); if (!l.includes(v)) { l.push(v); save("d-links", JSON.stringify(l.slice(-20))); } }
+if (linkD && parseISO(linkD) && !seenLinks().includes(linkD)) { save("session", linkD); markSeen(linkD); }
+for (const [p, key] of [["n", "name"], ["t", "what"]]) if (params.get(p)) save(key, params.get(p));
+let session = parseISO(load("session")) || parseISO(linkD);
 if (session && session > today) session = null;   // дата из будущего — спросим заново
 const name = params.get("n") || load("name") || "";
 const what = params.get("t") || load("what") || "";
@@ -792,7 +797,7 @@ function openModal(item, words, from) {
   $("m-text").innerHTML = when ? `<span class="when"></span><br>` : "";
   if (when) $("m-text").firstChild.textContent = when;
   $("m-text").append(item.text);
-  $("m-write").hidden = item.status !== "alarm";
+  $("m-write").hidden = !(item.status === "alarm" || (item.status === "care" && words === WORDS_NORMAL));
   $("mwrap").hidden = false;
   if (!reduce) {
     const r = from.getBoundingClientRect(), m = $("modal").getBoundingClientRect();
@@ -868,7 +873,7 @@ function render() {
   heroN = dayNo >= 365 ? Math.floor(dayNo / 365) : dayNo;
   $("day-num").textContent = heroN;
   document.querySelector(".day-w b").textContent = dayNo >= 365 ? plural(heroN, "год", "года", "лет") : "-й день";
-  $("day-of").textContent = dayNo >= 365 ? "Ого, как быстро летит время" : dayNo <= h ? `из ${h} до заживления` : "татуировка зажила";
+  $("day-of").textContent = dayNo >= 365 ? "Ого, как быстро летит время" : dayNo <= h ? `из ${h} дней заживления` : "татуировка зажила";
   const p = Math.min(100, dayNo / h * 100);
   $("track").setAttribute("aria-label", `День ${dayNo} из ${h}`);
   $("tick").style.left = (f / h * 100) + "%";
@@ -1118,11 +1123,13 @@ window.addEventListener("hashchange", () => show(location.hash.slice(1), true));
 
 // ---------- дата сеанса ----------
 function dateToUrl(d) {
+  markSeen(iso(d));
   try { const u = new URL(location.href); u.searchParams.set("d", iso(d)); history.replaceState(null, "", u.pathname + u.search + u.hash); } catch {}
 }
 function setSession(d) {
   if (!d || d > today) return;
   session = d;
+  $("ask-back").hidden = true;
   save("session", iso(d));
   dateToUrl(d);
   current = null;
@@ -1144,11 +1151,14 @@ const WD = ["воскресенье", "понедельник", "вторник"
   sel.addEventListener("change", () => { $("ask-go").disabled = !sel.value; });
   $("ask-go").addEventListener("click", () => setSession(parseISO(sel.value)));
 }
-$("session-edit").addEventListener("click", () => { session = null; show("today", true); });
+let prevSession = null;
+$("session-edit").addEventListener("click", () => { prevSession = session; session = null; $("ask-back").hidden = false; show("today", true); });
+$("ask-back").addEventListener("click", () => { if (prevSession) setSession(prevSession); });
 
-if (session) { render(); if (!params.get("d")) dateToUrl(session); }
+if (session) { render(); if (linkD !== iso(session)) dateToUrl(session); }
 show(location.hash.slice(1), false);
 maybePop();
+if ("serviceWorker" in navigator && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
 </body>
 </html>
